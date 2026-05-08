@@ -14,13 +14,112 @@ public class Schedulers {
         printResultsTable(completed);
     }
 
-    // Algorithm 2: Round Robin (Quantum = 5 ms)
-    public static void runRR() {
-        final int QUANTUM = 5;
-        List<PCB> completed = new ArrayList<>();
-        List<int[]> gantt = new ArrayList<>();
+     
+     // Algorithm 2: Round Robin (Quantum = 5 ms)
+        public static void runRR() {
+
+            final int QUANTUM = 5;
+
+            List<PCB> completed = new ArrayList<>();
+            List<int[]> gantt = new ArrayList<>();
+
+            Queue<PCB> rrQueue = new LinkedList<>();
+
+            int currentTime = 0;
+
+            // move all processes from readyQueue to RR queue
+            while (!Main.readyQueue.isEmpty()) {
+                PCB p = Main.readyQueue.poll();
+                p.state = "ready";
+                rrQueue.add(p);
+            }
+
+            while (!rrQueue.isEmpty()) {
+
+                PCB current = rrQueue.poll();
+
+                current.state = "running";
+
+                // save first start time
+                if (current.startTime == -1) {
+                    current.startTime = currentTime;
+                }
+
+                int start = currentTime;
+
+                // execute process for quantum or remaining burst
+                int executionTime =
+                        Math.min(QUANTUM, current.remainingBurst);
+
+                current.remainingBurst -= executionTime;
+
+                currentTime += executionTime;
+
+                int end = currentTime;
+
+                // save gantt chart info
+                gantt.add(new int[]{
+                        current.processId,
+                        start,
+                        end
+                });
+
+                // increase waiting time for other processes
+                for (PCB p : rrQueue) {
+                    p.waitingTime += executionTime;
+                }
+
+                // process finished
+                if (current.remainingBurst == 0) {
+
+                    current.state = "terminated";
+
+                    current.terminationTime = currentTime;
+
+                    current.turnaroundTime =
+                            current.terminationTime;
+
+                    completed.add(current);
+
+                    Main.releaseMemory(current.memoryRequired);
+
+                } else {
+
+                    // return process to queue
+                    current.state = "ready";
+
+                    rrQueue.add(current);
+                }
+            }
+
+            // display gantt chart
+            System.out.println("\nGantt Chart:");
+            for (int[] g : gantt) {
+
+                System.out.println(
+                        "P" + g[0] +
+                        " [" + g[1] +
+                        " - " + g[2] + "]"
+                );
+            }
+
+            // display results
+            System.out.println("\nProcess Table:");
+            System.out.println("PID\tWT\tTAT");
+
+            for (PCB p : completed) {
+
+                System.out.println(
+                        "P" + p.processId + "\t" +
+                        p.waitingTime + "\t" +
+                        p.turnaroundTime
+                );
+            }
+        }
+        
 
 /////////////////////////////////////////////////////////TODO
+
 
         // Display results
         printGantt(gantt);
