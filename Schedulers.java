@@ -92,29 +92,11 @@ public class Schedulers {
                 }
             }
 
-            // display gantt chart
-            System.out.println("\nGantt Chart:");
-            for (int[] g : gantt) {
-
-                System.out.println(
-                        "P" + g[0] +
-                        " [" + g[1] +
-                        " - " + g[2] + "]"
-                );
-            }
+         // display gantt chart
+            printGantt(gantt);
 
             // display results
-            System.out.println("\nProcess Table:");
-            System.out.println("PID\tWT\tTAT");
-
-            for (PCB p : completed) {
-
-                System.out.println(
-                        "P" + p.processId + "\t" +
-                        p.waitingTime + "\t" +
-                        p.turnaroundTime
-                );
-            }
+            printResultsTable(completed);
         }
         
 
