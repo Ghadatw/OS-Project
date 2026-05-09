@@ -7,7 +7,55 @@ public class Schedulers {
         List<PCB> completed = new ArrayList<>();
         List<int[]> gantt = new ArrayList<>(); // Stores {pid, start, end} for each execution
 
-        ///////////////////////////////////////////////////////// TODO
+        int currentTime = 0;
+
+    // Keep scheduling until every process has terminated
+    while (completed.size() < Main.totalProcesses) {
+        PCB shortest = null;
+
+        synchronized (Main.readyQueue) {
+            // Wait until Thread 2 has loaded at least one process into the ready queue
+            while (Main.readyQueue.isEmpty()) {
+                try {
+                    Main.readyQueue.wait();
+                } catch (InterruptedException e) { }
+            }
+
+            // Pick the process with the smallest burst time.
+            // LinkedList iterates in insertion (= arrival) order, and the
+            // strict "<" comparison keeps the earlier-arriving process on ties.
+            for (PCB p : Main.readyQueue) {
+                if (shortest == null || p.burstTime < shortest.burstTime) {
+                    shortest = p;
+                }
+            }
+
+            Main.readyQueue.remove(shortest);
+        }
+
+        // Non-preemptive: run the chosen process to completion
+        shortest.state = "running";
+        shortest.startTime = currentTime;
+        shortest.waitingTime = currentTime; // all processes arrive at time 0
+
+        int execStart = currentTime;
+        currentTime += shortest.burstTime;
+
+        shortest.terminationTime = currentTime;
+        shortest.turnaroundTime = currentTime; // arrival time = 0
+        shortest.state = "terminated";
+
+        // Free this process's memory so Thread 2 can admit any pending jobs
+        Main.releaseMemory(shortest.memoryRequired);
+
+        // Record execution for the Gantt chart and the results table
+        completed.add(shortest);
+        gantt.add(new int[]{shortest.processId, execStart, currentTime});
+
+        System.out.println("SJF: Time " + execStart + " -> " + currentTime
+            + " : P" + shortest.processId + " executing (burst="
+            + shortest.burstTime + ")");
+    }
 
         // Display results
         printGantt(gantt);
