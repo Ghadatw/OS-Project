@@ -77,8 +77,39 @@ class JobLoader implements Runnable {
     }
 
     @Override
-    public void run() {
-///////////////////////////////////////////////////////TODO
+       public void run() {
+        try (java.io.BufferedReader br =
+                 new java.io.BufferedReader(new java.io.FileReader(filename))) {
+            String line;
+            int count = 0;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+
+                // Parse line format: ID:Burst:Priority;Memory
+                String[] parts = line.split("[:;]");
+                int id = Integer.parseInt(parts[0].trim());
+                int burst = Integer.parseInt(parts[1].trim());
+                int priority = Integer.parseInt(parts[2].trim());
+                int memory = Integer.parseInt(parts[3].trim());
+
+                // Create a new PCB for the process
+                PCB process = new PCB(id, burst, priority, memory);
+
+                // add to the job queue 
+                synchronized (Main.jobQueue) {
+                    Main.jobQueue.add(process);
+                    Main.jobQueue.notifyAll();
+                }
+                count++;
+                System.out.println("Thread 1: Process P" + id + " added to job queue");
+            }
+            Main.totalProcesses = count;
+        } catch (Exception e) {
+            System.err.println("Thread 1: Error reading file: " + e.getMessage());
+        }
+        Main.jobLoadingDone = true;
+        System.out.println("Thread 1: Finished, total processes = " + Main.totalProcesses);
     }
 }
 
@@ -87,6 +118,36 @@ class JobLoader implements Runnable {
 class MemoryLoader implements Runnable {
     @Override
     public void run() {
-        ///////////////////////////////////////////////////////////TODO
-    }
+        while (!Main.simulationDone) {
+            synchronized (Main.jobQueue) {
+                if (!Main.jobQueue.isEmpty()) {
+                    PCB job = Main.jobQueue.peek();
+                    // Check if enough memory is available
+                    if (Main.usedMemory + job.memoryRequired <= Main.TOTAL_MEMORY) {
+                        Main.jobQueue.poll();
+                        Main.usedMemory += job.memoryRequired;
+                        job.state = "ready";
+
+                        // Move process from job queue to ready queue
+                        synchronized (Main.readyQueue) {
+                            Main.readyQueue.add(job);
+                            Main.readyQueue.notifyAll();
+                        }
+                        System.out.println("Thread 2: P" + job.processId
+                            + " loaded to ready queue (Memory used: "
+                            + Main.usedMemory + "/" + Main.TOTAL_MEMORY + " MB)");
+                    }
+                }
+            }
+
+            // Small sleep to avoid busy waiting and high CPU usage
+            try { Thread.sleep(1); } catch (InterruptedException e) {}
+
+            // Exit condition: all jobs loaded and simulation is done
+            if (Main.jobLoadingDone && Main.jobQueue.isEmpty() && Main.simulationDone) {
+                break;
+            }
+        }
+        System.out.println("Thread 2: Finished");
+}
 }
