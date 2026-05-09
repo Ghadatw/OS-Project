@@ -39,6 +39,10 @@ public class Main {
         // Wait for Thread 1 to finish reading the file
         t1.join();
 
+  
+        
+        Thread.sleep(50);
+
         // Main thread executes the selected scheduling algorithm
         switch (choice) {
             case 1:
