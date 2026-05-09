@@ -149,24 +149,122 @@ public class Schedulers {
 
     }
 
-    // Algorithm 3: Priority Scheduling
+       // Algorithm 3: Priority Scheduling
     public static void runPriority() {
-        List<PCB> completed = new ArrayList<>();
-        List<PCB> starvedList = new ArrayList<>(); // Tracks starved processes
-        List<int[]> gantt = new ArrayList<>();
-        int currentTime = 0;
+List<PCB> completed = new ArrayList<>();
+List<PCB> starvedList = new ArrayList<>();
+List<int[]> gantt = new ArrayList<>();
 
-        ///////////////////////////////////////////////////////// TODO
+int currentTime = 0;
 
-        // Display results
-        printGantt(gantt);
-        printResultsTable(completed);
+while (completed.size() < Main.totalProcesses) {
 
-        // Print Starvation Report (Required for Priority)
+PCB selected = null;
 
-        ///////////////////////////////////////////////////////// TODO
+synchronized (Main.readyQueue) {
+while (Main.readyQueue.isEmpty()) {
+try {
+Main.readyQueue.wait(1);
+currentTime++;
+} catch (InterruptedException e) {
+e.printStackTrace();
+}
+}
+
+// update waiting processes every scheduling check
+int N = Main.readyQueue.size();
+
+for (PCB p : Main.readyQueue) {
+p.timeInReadyQueue++;
+
+if (N > 0 && p.timeInReadyQueue > N * 5 && !p.starved) {
+p.starved = true;
+starvedList.add(p);
+}
+
+if (p.timeInReadyQueue % 4 == 0 && p.priority > 1) {
+p.priority--;
+}
+}
+
+// choose highest priority: smallest number
+// equal priority: first one in queue stays selected
+for (PCB p : Main.readyQueue) {
+if (selected == null || p.priority < selected.priority) {
+selected = p;
+}
+}
+
+Main.readyQueue.remove(selected);
+}
+
+selected.state = "running";
+selected.startTime = currentTime;
+
+int startTime = currentTime;
+int startBurst = selected.remainingBurst;
+
+// Non-preemptive: run until finish
+while (selected.remainingBurst > 0) {
+currentTime++;
+selected.remainingBurst--;
+
+synchronized (Main.readyQueue) {
+int N = Main.readyQueue.size();
+
+for (PCB p : Main.readyQueue) {
+p.timeInReadyQueue++;
+
+if (N > 0 && p.timeInReadyQueue > N * 5 && !p.starved) {
+p.starved = true;
+starvedList.add(p);
+}
+
+if (p.timeInReadyQueue % 4 == 0 && p.priority > 1) {
+p.priority--;
+}
+}
+}
+}
+
+selected.state = "terminated";
+selected.terminationTime = currentTime;
+selected.turnaroundTime = selected.terminationTime;
+selected.waitingTime = selected.turnaroundTime - selected.burstTime;
+
+completed.add(selected);
+
+gantt.add(new int[] {
+selected.processId,
+startTime,
+currentTime
+});
+
+System.out.println("Priority: P" + selected.processId
++ " selected at time " + startTime
++ ", stopped at time " + currentTime
++ ", burst " + startBurst + " -> " + selected.remainingBurst);
+
+Main.releaseMemory(selected.memoryRequired);
+}
+
+printGantt(gantt);
+printResultsTable(completed);
+
+System.out.println("\nStarvation Report:");
+if (starvedList.isEmpty()) {
+System.out.println("No process suffered from starvation.");
+} else {
+for (PCB p : starvedList) {
+System.out.println("P" + p.processId
++ " suffered from starvation. Original priority = "
++ p.originalPriority
++ ", final priority = " + p.priority);
+}
+}
 
     }
+
 
     // Print Gantt Chart
     static void printGantt(List<int[]> gantt) {
