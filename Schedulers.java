@@ -175,16 +175,15 @@ e.printStackTrace();
 int N = Main.readyQueue.size();
 
 for (PCB p : Main.readyQueue) {
-p.timeInReadyQueue++;
-
-if (N > 0 && p.timeInReadyQueue > N * 5 && !p.starved) {
-p.starved = true;
-starvedList.add(p);
-}
-
-if (p.timeInReadyQueue % 4 == 0 && p.priority > 1) {
-p.priority--;
-}
+    if (selected == null) {
+        selected = p;
+    } else if (p.priority < selected.priority) {
+        selected = p;
+    } else if (p.priority == selected.priority
+               && p.originalPriority < selected.originalPriority) {
+        // ✅ Tie-breaker: process with higher original priority wins
+        selected = p;
+    }
 }
 
 // choose highest priority: smallest number
