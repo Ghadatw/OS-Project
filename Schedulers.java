@@ -171,8 +171,6 @@ public class Schedulers {
                     }
                 }
 
-                // update waiting processes every scheduling check
-                int N = Main.readyQueue.size();
 
                 for (PCB p : Main.readyQueue) {
                     if (selected == null) {
@@ -182,14 +180,6 @@ public class Schedulers {
                     } else if (p.priority == selected.priority
                             && p.originalPriority < selected.originalPriority) {
                         // Tie-breaker: process with higher original priority wins
-                        selected = p;
-                    }
-                }
-
-                // choose highest priority: smallest number
-                // equal priority: first one in queue stays selected
-                for (PCB p : Main.readyQueue) {
-                    if (selected == null || p.priority < selected.priority) {
                         selected = p;
                     }
                 }
