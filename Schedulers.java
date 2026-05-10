@@ -9,53 +9,54 @@ public class Schedulers {
 
         int currentTime = 0;
 
-    // Keep scheduling until every process has terminated
-    while (completed.size() < Main.totalProcesses) {
-        PCB shortest = null;
+        // Keep scheduling until every process has terminated
+        while (completed.size() < Main.totalProcesses) {
+            PCB shortest = null;
 
-        synchronized (Main.readyQueue) {
-            // Wait until Thread 2 has loaded at least one process into the ready queue
-            while (Main.readyQueue.isEmpty()) {
-                try {
-                    Main.readyQueue.wait();
-                } catch (InterruptedException e) { }
-            }
-
-            // Pick the process with the smallest burst time.
-            // LinkedList iterates in insertion (= arrival) order, and the
-            // strict "<" comparison keeps the earlier-arriving process on ties.
-            for (PCB p : Main.readyQueue) {
-                if (shortest == null || p.burstTime < shortest.burstTime) {
-                    shortest = p;
+            synchronized (Main.readyQueue) {
+                // Wait until Thread 2 has loaded at least one process into the ready queue
+                while (Main.readyQueue.isEmpty()) {
+                    try {
+                        Main.readyQueue.wait();
+                    } catch (InterruptedException e) {
+                    }
                 }
+
+                // Pick the process with the smallest burst time.
+                // LinkedList iterates in insertion (= arrival) order, and the
+                // strict "<" comparison keeps the earlier-arriving process on ties.
+                for (PCB p : Main.readyQueue) {
+                    if (shortest == null || p.burstTime < shortest.burstTime) {
+                        shortest = p;
+                    }
+                }
+
+                Main.readyQueue.remove(shortest);
             }
 
-            Main.readyQueue.remove(shortest);
+            // Non-preemptive: run the chosen process to completion
+            shortest.state = "running";
+            shortest.startTime = currentTime;
+            shortest.waitingTime = currentTime; // all processes arrive at time 0
+
+            int execStart = currentTime;
+            currentTime += shortest.burstTime;
+
+            shortest.terminationTime = currentTime;
+            shortest.turnaroundTime = currentTime; // arrival time = 0
+            shortest.state = "terminated";
+
+            // Free this process's memory so Thread 2 can admit any pending jobs
+            Main.releaseMemory(shortest.memoryRequired);
+
+            // Record execution for the Gantt chart and the results table
+            completed.add(shortest);
+            gantt.add(new int[] { shortest.processId, execStart, currentTime });
+
+            System.out.println("SJF: Time " + execStart + " -> " + currentTime
+                    + " : P" + shortest.processId + " executing (burst="
+                    + shortest.burstTime + ")");
         }
-
-        // Non-preemptive: run the chosen process to completion
-        shortest.state = "running";
-        shortest.startTime = currentTime;
-        shortest.waitingTime = currentTime; // all processes arrive at time 0
-
-        int execStart = currentTime;
-        currentTime += shortest.burstTime;
-
-        shortest.terminationTime = currentTime;
-        shortest.turnaroundTime = currentTime; // arrival time = 0
-        shortest.state = "terminated";
-
-        // Free this process's memory so Thread 2 can admit any pending jobs
-        Main.releaseMemory(shortest.memoryRequired);
-
-        // Record execution for the Gantt chart and the results table
-        completed.add(shortest);
-        gantt.add(new int[]{shortest.processId, execStart, currentTime});
-
-        System.out.println("SJF: Time " + execStart + " -> " + currentTime
-            + " : P" + shortest.processId + " executing (burst="
-            + shortest.burstTime + ")");
-    }
 
         // Display results
         printGantt(gantt);
@@ -70,10 +71,9 @@ public class Schedulers {
         List<PCB> completed = new ArrayList<>();
         List<int[]> gantt = new ArrayList<>();
 
-        Queue<PCB> rrQueue = new LinkedList<>();  // Local queue for RR rotation
+        Queue<PCB> rrQueue = new LinkedList<>(); // Local queue for RR rotation
 
         int currentTime = 0;
-
 
         // Continue until all processes are completed
         while (completed.size() < Main.totalProcesses) {
@@ -149,121 +149,120 @@ public class Schedulers {
 
     }
 
-       // Algorithm 3: Priority Scheduling
+    // Algorithm 3: Priority Scheduling
     public static void runPriority() {
-List<PCB> completed = new ArrayList<>();
-List<PCB> starvedList = new ArrayList<>();
-List<int[]> gantt = new ArrayList<>();
+        List<PCB> completed = new ArrayList<>();
+        List<PCB> starvedList = new ArrayList<>();
+        List<int[]> gantt = new ArrayList<>();
 
-int currentTime = 0;
+        int currentTime = 0;
 
-while (completed.size() < Main.totalProcesses) {
+        while (completed.size() < Main.totalProcesses) {
 
-PCB selected = null;
+            PCB selected = null;
 
-synchronized (Main.readyQueue) {
-while (Main.readyQueue.isEmpty()) {
-try {
-Main.readyQueue.wait(1);
-currentTime++;
-} catch (InterruptedException e) {
-e.printStackTrace();
-}
-}
+            synchronized (Main.readyQueue) {
+                while (Main.readyQueue.isEmpty()) {
+                    try {
+                        Main.readyQueue.wait(1);
+                        currentTime++;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
 
-// update waiting processes every scheduling check
-int N = Main.readyQueue.size();
+                // update waiting processes every scheduling check
+                int N = Main.readyQueue.size();
 
-for (PCB p : Main.readyQueue) {
-    if (selected == null) {
-        selected = p;
-    } else if (p.priority < selected.priority) {
-        selected = p;
-    } else if (p.priority == selected.priority
-               && p.originalPriority < selected.originalPriority) {
-        // ✅ Tie-breaker: process with higher original priority wins
-        selected = p;
+                for (PCB p : Main.readyQueue) {
+                    if (selected == null) {
+                        selected = p;
+                    } else if (p.priority < selected.priority) {
+                        selected = p;
+                    } else if (p.priority == selected.priority
+                            && p.originalPriority < selected.originalPriority) {
+                        // Tie-breaker: process with higher original priority wins
+                        selected = p;
+                    }
+                }
+
+                // choose highest priority: smallest number
+                // equal priority: first one in queue stays selected
+                for (PCB p : Main.readyQueue) {
+                    if (selected == null || p.priority < selected.priority) {
+                        selected = p;
+                    }
+                }
+
+                Main.readyQueue.remove(selected);
+            }
+
+            selected.state = "running";
+            selected.startTime = currentTime;
+
+            int startTime = currentTime;
+            int startBurst = selected.remainingBurst;
+
+            // Non-preemptive: run until finish
+            while (selected.remainingBurst > 0) {
+                currentTime++;
+                selected.remainingBurst--;
+
+                synchronized (Main.readyQueue) {
+                    int N = Main.readyQueue.size();
+
+                    for (PCB p : Main.readyQueue) {
+                        p.timeInReadyQueue++;
+
+                        if (N > 0 && p.timeInReadyQueue > N * 5 && !p.starved) {
+                            p.starved = true;
+                            starvedList.add(p);
+                        }
+
+                        if (p.timeInReadyQueue % 4 == 0 && p.priority > 1) {
+                            p.priority--;
+                        }
+                    }
+                }
+            }
+
+            selected.state = "terminated";
+            selected.terminationTime = currentTime;
+            selected.turnaroundTime = selected.terminationTime;
+            selected.waitingTime = selected.turnaroundTime - selected.burstTime;
+
+            completed.add(selected);
+
+            gantt.add(new int[] {
+                    selected.processId,
+                    startTime,
+                    currentTime
+            });
+
+            System.out.println("Priority: P" + selected.processId
+                    + " selected at time " + startTime
+                    + ", stopped at time " + currentTime
+                    + ", burst " + startBurst + " -> " + selected.remainingBurst);
+
+            Main.releaseMemory(selected.memoryRequired);
+        }
+
+        printGantt(gantt);
+        printResultsTable(completed);
+
+        System.out.println("\nStarvation Report:");
+        if (starvedList.isEmpty()) {
+            System.out.println("No process suffered from starvation.");
+        } else {
+            for (PCB p : starvedList) {
+                System.out.println("P" + p.processId
+                        + " suffered from starvation. Original priority = "
+                        + p.originalPriority
+                        + ", final priority = " + p.priority);
+            }
+        }
+
     }
-}
-
-// choose highest priority: smallest number
-// equal priority: first one in queue stays selected
-for (PCB p : Main.readyQueue) {
-if (selected == null || p.priority < selected.priority) {
-selected = p;
-}
-}
-
-Main.readyQueue.remove(selected);
-}
-
-selected.state = "running";
-selected.startTime = currentTime;
-
-int startTime = currentTime;
-int startBurst = selected.remainingBurst;
-
-// Non-preemptive: run until finish
-while (selected.remainingBurst > 0) {
-currentTime++;
-selected.remainingBurst--;
-
-synchronized (Main.readyQueue) {
-int N = Main.readyQueue.size();
-
-for (PCB p : Main.readyQueue) {
-p.timeInReadyQueue++;
-
-if (N > 0 && p.timeInReadyQueue > N * 5 && !p.starved) {
-p.starved = true;
-starvedList.add(p);
-}
-
-if (p.timeInReadyQueue % 4 == 0 && p.priority > 1) {
-p.priority--;
-}
-}
-}
-}
-
-selected.state = "terminated";
-selected.terminationTime = currentTime;
-selected.turnaroundTime = selected.terminationTime;
-selected.waitingTime = selected.turnaroundTime - selected.burstTime;
-
-completed.add(selected);
-
-gantt.add(new int[] {
-selected.processId,
-startTime,
-currentTime
-});
-
-System.out.println("Priority: P" + selected.processId
-+ " selected at time " + startTime
-+ ", stopped at time " + currentTime
-+ ", burst " + startBurst + " -> " + selected.remainingBurst);
-
-Main.releaseMemory(selected.memoryRequired);
-}
-
-printGantt(gantt);
-printResultsTable(completed);
-
-System.out.println("\nStarvation Report:");
-if (starvedList.isEmpty()) {
-System.out.println("No process suffered from starvation.");
-} else {
-for (PCB p : starvedList) {
-System.out.println("P" + p.processId
-+ " suffered from starvation. Original priority = "
-+ p.originalPriority
-+ ", final priority = " + p.priority);
-}
-}
-
-    }
-
 
     // Print Gantt Chart
     static void printGantt(List<int[]> gantt) {
